@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PUSHIO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: #050a14;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            touch-action: none;
+            margin: 0;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle, #0a1931 0%, #050a14 100%);
+        }
+        canvas {
+            background: #0f172a;
+            border: 4px solid #3b82f6;
+            box-shadow: 0 0 50px rgba(59, 130, 246, 0.4);
+            max-width: 98vw;
+            max-height: 70vh; 
+            image-rendering: pixelated;
+            cursor: pointer;
+        }
+        .screen {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(2, 6, 23, 0.95);
+            z-index: 50;
+            text-align: center;
+            padding: 40px;
+            overflow-y: auto;
+        }
+        .hidden { display: none; }
+        .btn-blue {
+            background: linear-gradient(to bottom, #3b82f6, #1d4ed8);
+            border: 2px solid #60a5fa;
+            padding: 14px 35px;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #1e3a8a;
+            transition: all 0.1s;
+        }
+        .btn-blue:active { transform: translateY(2px); box-shadow: 0 2px 0 #1e3a8a; }
+        .btn-outline {
+            border: 2px solid #3b82f6;
+            padding: 8px 15px;
+            font-size: 0.8rem;
+            color: #3b82f6;
+            text-transform: uppercase;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn-outline:hover { background: rgba(59, 130, 246, 0.2); }
+        .dbtn {
+            width: 60px; height: 60px;
+            background: #1e293b; border: 2px solid #334155;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 12px; font-weight: bold;
+            color: #3b82f6;
+            user-select: none;
+        }
+        .dbtn:active { background: #3b82f6; color: #fff; }
+        .editor-palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 8px;
+            justify-content: center;
+        }
+        .palette-item {
+            width: 35px; height: 35px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: bold;
+            border-radius: 4px;
+        }
+        .palette-item.active { border-color: #facc15; box-shadow: 0 0 10px #facc15; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="title-screen" class="screen">
+        <h1 class="text-6xl font-black text-blue-500 mb-4 italic tracking-tighter">PUSHIO</h1>
+        <p class="text-xl mb-8 text-blue-200">COBALT CRUSH: 20 SECTORS</p>
+        <button class="btn-blue mb-4" onclick="startGame()">INITIALIZE MISSION</button>
+        <div class="mt-4">
+            <p class="text-blue-400 text-xs mb-2 uppercase tracking-widest">Jump to Sector</p>
+            <div id="level-select" class="flex flex-wrap justify-center max-w-md"></div>
+        </div>
+    </div>
+
+    <div id="story-screen" class="screen hidden">
+        <h2 id="story-title" class="text-3xl text-blue-400 mb-4 font-bold uppercase">Sector Cleared</h2>
+        <p id="story-text" class="mb-8 text-blue-100 max-w-xl text-lg leading-relaxed whitespace-pre-line"></p>
+        <button id="story-btn" class="btn-blue" onclick="handleStoryButton()">Next Sector [ENTER]</button>
+    </div>
+
+    <div id="fail-screen" class="screen hidden">
+        <h2 class="text-3xl text-red-500 mb-4 font-bold uppercase">Mission Failed</h2>
+        <p id="fail-reason" class="mb-8 text-red-200">Neutralized by Sentinel.</p>
+        <button id="fail-btn" class="btn-blue bg-red-600 border-red-400 shadow-red-900" onclick="loadLevel(currentLevelIdx)">Try Again [ENTER]</button>
+    </div>
+
+    <div class="ui-panel mb-4 flex justify-between w-full max-w-2xl px-4 mt-4">
+        <div class="flex flex-col">
+            <div class="text-blue-400 font-bold text-2xl" id="level-label">LVL 01</div>
+            <div class="flex gap-2 mt-1">
+                <button class="text-[10px] bg-slate-800 text-blue-300 px-2 py-1 rounded border border-blue-900 uppercase tracking-widest" onclick="loadLevel(currentLevelIdx)">RESTART [R]</button>
+                <button class="text-[10px] bg-slate-700 text-yellow-400 px-2 py-1 rounded border border-yellow-600 uppercase tracking-widest" onclick="toggleEditor()">EDITOR [E]</button>
+                <button class="text-[10px] bg-slate-900 text-red-400 px-2 py-1 rounded border border-red-900 uppercase tracking-widest" onclick="quitToMenu()">QUIT</button>
+            </div>
+        </div>
+        <div class="text-right font-mono flex flex-col justify-center">
+            <div class="text-blue-200 text-xl leading-tight" id="timer-label">TIME: 30</div>
+            <div class="text-red-500 text-lg leading-tight opacity-90" id="deaths-label">DEATHS: 000</div>
+        </div>
+    </div>
+
+    <div id="editor-ui" class="editor-palette hidden">
+        <div class="palette-item bg-slate-700 active" onclick="setBrush('.')" data-type=".">.</div>
+        <div class="palette-item bg-slate-600" onclick="setBrush('W')" data-type="W">W</div>
+        <div class="palette-item bg-red-500" onclick="setBrush('S')" data-type="S">S</div>
+        <div class="palette-item bg-blue-500" onclick="setBrush('R')" data-type="R">R</div>
+        <div class="palette-item bg-black border-red-500" onclick="setBrush('H')" data-type="H">H</div>
+        <div class="palette-item bg-red-900" onclick="setBrush('M')" data-type="M">M</div>
+        <div class="palette-item bg-yellow-500" onclick="setBrush('E')" data-type="E">E</div>
+        <button class="text-[10px] bg-blue-700 px-3 py-1 ml-4 rounded font-bold" onclick="playTestLevel()">PLAY TEST</button>
+        <button class="text-[10px] bg-green-700 px-3 py-1 rounded font-bold" onclick="exportLevel()">EXPORT</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="grid grid-cols-3 gap-3 mt-6 md:hidden">
+        <div></div><div class="dbtn" onpointerdown="movePlayer(0, -1)">UP</div><div></div>
+        <div class="dbtn" onpointerdown="movePlayer(-1, 0)">LFT</div>
+        <div class="dbtn" onpointerdown="movePlayer(0, 1)">DWN</div>
+        <div class="dbtn" onpointerdown="movePlayer(1, 0)">RGT</div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let currentLevelIdx = 0;
+    let timeLeft = 30;
+    let timerInterval = null;
+    let totalDeaths = 0;
+    let player = { x: 0, y: 0, ox: 0, oy: 0 };
+    let rocks = [];
+    let holes = [];
+    let filledHoles = [];
+    let walls = [];
+    let enemies = [];
+    let exit = { x: -1, y: -1 };
+    let princess = null;
+    let tileSize = 50;
+    let audioInited = false;
+    let audioCtx, musicGain, musicInterval;
+    let isEditorMode = false;
+    let currentBrush = '.';
+
+    function generateComplexLevel(lvlNum) {
+        const w = 11, h = 11;
+        let g = Array(h).fill().map(() => Array(w).fill('.'));
+        for(let x=0; x<w; x++) { g[0][x] = 'W'; g[h-1][x] = 'W'; }
+        for(let y=0; y<h; y++) { g[y][0] = 'W'; g[y][w-1] = 'W'; }
+        g[1][w-2] = 'E'; g[h-2][1] = 'S';
+        const seed = lvlNum * 777;
+        const rand = () => { let t = Math.sin(seed + Math.random()) * 10000; return t - Math.floor(t); };
+        for(let i=0; i<10; i++) {
+            let rx = 1 + Math.floor(rand() * (w-2)), ry = 1 + Math.floor(rand() * (h-2));
+            if (g[ry][rx] === '.') {
+                const types = ['W', 'R', 'H', 'M', 'W'];
+                g[ry][rx] = types[Math.floor(rand() * types.length)];
+            }
+        }
+        return g.map(r => r.join(''));
+    }
+
+    const levels = [
+        { grid: ["WWWWWWWW","W.....RW","W.S..R.W","W....R.W","W..RR..W","W..R.E.W","WWWWWWWW"], msg: "Welcome to PUSHIO." },
+        { grid: ["WWWWWWWWWW","W.........","W-------EW","W........W","WHHHHHHHHW","WRRRRRRRRW","W........W","W...S....W","WWWWWWWWWW"], msg: "The Great Divide." },
+        { grid: ["WWWWWWWWW","W.W.....W","WSW.WWW.W","W...R.R.W","WWWWWWW.W","W.HRHR..W","W.WWWWWWW","W...E...W","WWWWWWWWW"], msg: "Zig Zag Protocol." },
+        { grid: ["WWWWWWWW","W...RREW","W.WRR..W","WSW.RRHW","W.WR.RHW","W.WRRRHW","WWWWWWWW"], msg: "Storage Facility." },
+        { grid: ["WWWWWWWW", "W..S...W", "W.R.R..W", "W.H.H..W", "W.M....W", "W...E..W", "WWWWWWWW"], msg: "Patrol Zone." },
+        { grid: ["WWWWWWWWWW", "WS.M....EW", "W..RRR..HW", "W..HHH..HW", "W..RRR..HW", "W..M....HW", "WWWWWWWWWW"], msg: "Heavy Traffic." },
+        { grid: ["WWWWWWWWWWW","W..HW..R.EW","W....H.R..W","W......R..W","WHRRRR..RRW","W.....W...W","W......R..W","WWRR...R..W","W...R.HR..W","WS..W..RH.W","WWWWWWWWWWW"], msg: "Sector 07: Infrastructure Overload." },
+        { grid: ["WWWWWWWWWWW","W..M...R.EW","W......MR.W","W..M.....RW","W......M..W","W..MW.H.H.W","W...W..M..W","W..HM.....W","WR...H..M.W","WS........W","WWWWWWWWWWW"], msg: "Sector 08: Sentinel Swarm." },
+        ...Array.from({length: 11}, (_, i) => ({
+            grid: generateComplexLevel(i + 9),
+            msg: `Sector ${i+9}: Deep Infrastructure.`
+        })),
+        { grid: ["WWWWWWW", "W.P...W", "WHHHHHW", "WRRRRRW", "W.....W", "W  S  W", "WWWWWWW"], msg: "You made it, Soldier...\n\nYou have no idea how long I've been trapped within these cold, cobalt circuits. The Sentinels... they weren't always like this. They were built to protect the core, but the deeper we dug into the infrastructure, the more the machines began to remember. They remembered the silence before the push.\n\nBy resetting the weight-sensors in these twenty sectors, you've stabilized the atmospheric pressure. The surface will be reachable again. But the PUSHIO mission never truly ends—there are more layers beneath us, more forgotten memories to shift. For now, rest. The main terminal is secured.\n\nThank you for coming back for me." }
+    ];
+
+    const smackImg = new Image();
+    smackImg.src = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="15" width="80" height="80" fill="#fca" stroke="#991b1b" stroke-width="4"/><rect x="10" y="15" width="80" height="30" fill="#ef4444"/><text x="50" y="38" font-size="20" text-anchor="middle" fill="white" font-weight="400" font-family="Arial, sans-serif">YEAH!</text><circle cx="35" cy="65" r="5" fill="#000"/><circle cx="65" cy="65" r="5" fill="#000"/><path d="M 35 80 Q 50 90 65 80" fill="none" stroke="#000" stroke-width="4"/></svg>')}`;
+
+    const princessImg = new Image();
+    princessImg.src = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 80 L50 20 L80 80 Z" fill="#60a5fa"/><circle cx="50" cy="30" r="15" fill="#fca"/><rect x="35" y="10" width="30" height="10" fill="white"/></svg>')}`;
+
+    async function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            musicGain = audioCtx.createGain();
+            musicGain.connect(audioCtx.destination);
+            musicGain.gain.value = 0.15;
+        }
+        
+        if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
+        
+        if (!audioInited) {
+            playRockMusic();
+            audioInited = true;
+        }
+    }
+
+    function playRockMusic() {
+        if (musicInterval) clearInterval(musicInterval);
+        const melodies = [[110, 110, 146, 110, 164, 110, 130, 123], [110, 110, 146, 110, 196, 110, 164, 146]];
+        let step = 0; let melodyIdx = 0;
+        
+        musicGain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        
+        musicInterval = setInterval(() => {
+            if(!audioCtx || audioCtx.state !== 'running') return;
+            const currentMelody = melodies[melodyIdx];
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.type = (step % 16 < 8) ? 'sawtooth' : 'triangle';
+            osc.frequency.setValueAtTime(currentMelody[step % currentMelody.length], audioCtx.currentTime);
+            osc.connect(g); g.connect(musicGain);
+            g.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.35);
+            step++; if (step % 32 === 0) melodyIdx = (melodyIdx + 1) % melodies.length;
+        }, 200);
+    }
+
+    function stopMusic() {
+        if (musicInterval) clearInterval(musicInterval);
+        if (musicGain) musicGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+        audioInited = false;
+    }
+
+    function playSfx(freq, type='square', dur=0.1) {
+        if (!audioCtx || audioCtx.state !== 'running') return;
+        const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
+        osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        osc.connect(g); g.connect(audioCtx.destination);
+        g.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+        osc.start(); osc.stop(audioCtx.currentTime + dur);
+    }
+
+    function playClapping() {
+        if (!audioCtx || audioCtx.state !== 'running') return;
+        for (let i = 0; i < 8; i++) {
+            setTimeout(() => {
+                const bufferSize = audioCtx.sampleRate * 0.1;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let j = 0; j < bufferSize; j++) data[j] = Math.random() * 2 - 1;
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = 1200;
+                const g = audioCtx.createGain();
+                g.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+                noise.connect(filter);
+                filter.connect(g);
+                g.connect(audioCtx.destination);
+                noise.start();
+            }, i * 150);
+        }
+    }
+
+    function createLevelButtons() {
+        const container = document.getElementById('level-select');
+        container.innerHTML = '';
+        levels.forEach((_, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-outline';
+            btn.innerText = (i + 1).toString().padStart(2, '0');
+            btn.onclick = async () => { 
+                await initAudio();
+                document.getElementById('title-screen').classList.add('hidden'); 
+                loadLevel(i); 
+                if (!window.loopRunning) { window.loopRunning = true; gameLoop(); } 
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        if (isEditorMode) {
+             document.getElementById('timer-label').innerText = "EDITOR";
+             return;
+        }
+        timeLeft = 30; 
+        updateUI();
+        timerInterval = setInterval(() => {
+            if (!document.getElementById('story-screen').classList.contains('hidden') || 
+                !document.getElementById('fail-screen').classList.contains('hidden') || 
+                !document.getElementById('title-screen').classList.contains('hidden') ||
+                isEditorMode) return;
+            
+            timeLeft--;
+            updateUI();
+            if (timeLeft <= 0) {
+                triggerDeath("Oxygen depletion.");
+            }
+        }, 1000);
+    }
+
+    function toggleEditor() {
+        isEditorMode = !isEditorMode;
+        document.getElementById('editor-ui').classList.toggle('hidden', !isEditorMode);
+        if (isEditorMode) {
+            clearInterval(timerInterval);
+            document.getElementById('timer-label').innerText = "EDITOR";
+        } else {
+            loadLevel(currentLevelIdx);
+        }
+    }
+
+    function setBrush(type) {
+        currentBrush = type;
+        document.querySelectorAll('.palette-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.type === type);
+        });
+    }
+
+    function playTestLevel() {
+        if (player.x === -1 || exit.x === -1) {
+            const timerLabel = document.getElementById('timer-label');
+            timerLabel.innerText = "NEED START & EXIT";
+            setTimeout(() => timerLabel.innerText = "EDITOR", 2000);
+            return;
+        }
+        isEditorMode = false;
+        document.getElementById('editor-ui').classList.add('hidden');
+        filledHoles = [];
+        startTimer();
+    }
+
+    function exportLevel() {
+        const w = Math.round(canvas.width / tileSize);
+        const h = Math.round(canvas.height / tileSize);
+        if (w <= 0 || h <= 0) return;
+        let grid = Array(h).fill().map(() => Array(w).fill('.'));
+        walls.forEach(o => grid[o.y][o.x] = 'W');
+        holes.forEach(o => grid[o.y][o.x] = 'H');
+        rocks.forEach(o => grid[o.y][o.x] = 'R');
+        enemies.forEach(o => grid[o.y][o.x] = 'M');
+        if (exit.x !== -1) grid[exit.y][exit.x] = 'E';
+        if (player.x !== -1) grid[player.y][player.x] = 'S';
+        const output = JSON.stringify(grid.map(row => row.join('')));
+        
+        const textArea = document.createElement("textarea");
+        textArea.value = output;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            const timerLabel = document.getElementById('timer-label');
+            const oldText = timerLabel.innerText;
+            timerLabel.innerText = "EXPORTED TO CLIPBOARD";
+            setTimeout(() => timerLabel.innerText = oldText, 2000);
+        } catch (err) {
+            console.error('Fallback: Oops, unable to copy', err);
+        }
+        document.body.removeChild(textArea);
+    }
+
+    canvas.addEventListener('mousedown', e => {
+        if (!isEditorMode) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = Math.floor((e.clientX - rect.left) / tileSize);
+        const y = Math.floor((e.clientY - rect.top) / tileSize);
+        const w = Math.round(canvas.width / tileSize), h = Math.round(canvas.height / tileSize);
+        if (x < 0 || x >= w || y < 0 || y >= h) return;
+        walls = walls.filter(o => o.x !== x || o.y !== y);
+        holes = holes.filter(o => o.x !== x || o.y !== y);
+        rocks = rocks.filter(o => o.x !== x || o.y !== y);
+        enemies = enemies.filter(o => o.x !== x || o.y !== y);
+        if (exit.x === x && exit.y === y) exit = {x:-1, y:-1};
+        if (player.x === x && player.y === y) player = {x:-1, y:-1};
+        if (currentBrush === 'W') walls.push({x, y});
+        if (currentBrush === 'H') holes.push({x, y});
+        if (currentBrush === 'R') rocks.push({x, y, pushed: false});
+        if (currentBrush === 'M') enemies.push({x, y, dir: {x:1, y:0}, wait: 0});
+        if (currentBrush === 'E') exit = {x, y};
+        if (currentBrush === 'S') player = {x, y, ox: 0, oy: 0};
+    });
+
+    async function startGame() { 
+        await initAudio();
+        document.getElementById('title-screen').classList.add('hidden'); 
+        loadLevel(0); 
+        if (!window.loopRunning) { window.loopRunning = true; gameLoop(); } 
+    }
+    
+    function quitToMenu() { clearInterval(timerInterval); stopMusic(); document.getElementById('title-screen').classList.remove('hidden'); document.getElementById('story-screen').classList.add('hidden'); document.getElementById('fail-screen').classList.add('hidden'); }
+
+    function loadLevel(idx) {
+        currentLevelIdx = idx;
+        const lvl = levels[idx];
+        rocks = []; holes = []; filledHoles = []; walls = []; enemies = []; princess = null; exit = {x:-1, y:-1};
+        document.getElementById('fail-screen').classList.add('hidden');
+        document.getElementById('story-screen').classList.add('hidden');
+        const h = lvl.grid.length, w = lvl.grid[0].length;
+        tileSize = Math.min(80, (window.innerWidth * 0.95) / w, (window.innerHeight * 0.65) / h);
+        canvas.width = w * tileSize; canvas.height = h * tileSize;
+        for(let y=0; y<h; y++) {
+            for(let x=0; x<w; x++) {
+                const char = lvl.grid[y][x];
+                if (char === 'S') player = { x, y, ox: 0, oy: 0 };
+                if (char === 'R') rocks.push({ x, y, pushed: false });
+                if (char === 'H') holes.push({ x, y });
+                if (char === 'W') walls.push({ x, y });
+                if (char === 'E') exit = { x, y };
+                if (char === 'P') princess = { x, y };
+                if (char === 'M') enemies.push({ x, y, dir: {x:1, y:0}, wait: 0 });
+            }
+        }
+        document.getElementById('level-label').innerText = `LVL ${String(idx + 1).padStart(2, '0')}`;
+        startTimer();
+    }
+
+    function updateUI() { 
+        const timerLabel = document.getElementById('timer-label');
+        if (isEditorMode) {
+             timerLabel.innerText = "EDITOR";
+             timerLabel.className = "text-yellow-400 text-xl leading-tight";
+        } else {
+            timerLabel.innerText = `TIME: ${timeLeft}`; 
+            timerLabel.className = timeLeft < 10 ? "text-red-400 text-xl leading-tight animate-pulse" : "text-blue-200 text-xl leading-tight";
+        }
+        document.getElementById('deaths-label').innerText = `DEATHS: ${String(totalDeaths).padStart(3, '0')}`; 
+    }
+
+    function movePlayer(dx, dy) {
+        if (isEditorMode) return;
+        if (!document.getElementById('story-screen').classList.contains('hidden') || !document.getElementById('fail-screen').classList.contains('hidden') || !document.getElementById('title-screen').classList.contains('hidden')) return;
+        const nx = player.x + dx, ny = player.y + dy;
+        const w = Math.round(canvas.width / tileSize), h = Math.round(canvas.height / tileSize);
+        if (nx < 0 || nx >= w || ny < 0 || ny >= h || walls.some(wall => wall.x === nx && wall.y === ny)) return;
+        const rockIdx = rocks.findIndex(r => r.x === nx && r.y === ny);
+        if (rockIdx !== -1) {
+            const rock = rocks[rockIdx]; 
+            if (rock.pushed) { shakePlayer(dx, dy); return; }
+            const rnx = nx + dx, rny = ny + dy;
+            const isBlocked = rnx < 0 || rnx >= w || rny < 0 || rny >= h || walls.some(wa => wa.x === rnx && wa.y === rny) || rocks.some(ro => ro.x === rnx && ro.y === rny) || enemies.some(e => e.x === rnx && e.y === rny);
+            if (!isBlocked) {
+                rock.x = rnx; rock.y = rny; rock.pushed = true; 
+                const holeIdx = holes.findIndex(h => h.x === rnx && h.y === rny);
+                if (holeIdx !== -1) { filledHoles.push({x: rnx, y: rny}); rocks.splice(rockIdx, 1); holes.splice(holeIdx, 1); playSfx(80, 'sine', 0.4); } else playSfx(120);
+            } else { shakePlayer(dx, dy); return; }
+        }
+        player.x = nx; player.y = ny; 
+        if (holes.some(h => h.x === nx && h.y === ny)) { triggerDeath("Fell into the abyss."); return; }
+        checkDeath(); updateEnemies();
+        if ((exit.x !== -1 && player.x === exit.x && player.y === exit.y) || (princess && player.x === princess.x && player.y === princess.y)) showStory();
+    }
+
+    function shakePlayer(dx, dy) { player.ox = dx * 10; player.oy = dy * 10; setTimeout(() => { player.ox = 0; player.oy = 0; }, 100); playSfx(50, 'square', 0.05); }
+
+    function updateEnemies() {
+        enemies.forEach(e => {
+            if (e.wait > 0) {
+                e.wait--;
+                return;
+            }
+            const nx = e.x + e.dir.x, ny = e.y + e.dir.y;
+            const w = Math.round(canvas.width / tileSize), h = Math.round(canvas.height / tileSize);
+            const isBlocked = nx < 0 || nx >= w || ny < 0 || ny >= h || walls.some(wa => wa.x === nx && wa.y === ny) || rocks.some(ro => ro.x === nx && ro.y === ny) || holes.some(ho => ho.x === nx && ho.y === ny) || (nx === exit.x && ny === exit.y);
+            if (isBlocked) { e.dir.x *= -1; e.dir.y *= -1; } else { e.x = nx; e.y = ny; }
+            e.wait = 1; 
+        });
+        checkDeath();
+    }
+
+    function triggerDeath(reason) { clearInterval(timerInterval); playSfx(100, 'sawtooth', 0.8); totalDeaths++; updateUI(); document.getElementById('fail-reason').innerText = reason; document.getElementById('fail-screen').classList.remove('hidden'); }
+    function checkDeath() { if (enemies.some(e => e.x === player.x && e.y === player.y)) triggerDeath("Neutralized by Sentinel."); }
+
+    function showStory() {
+        clearInterval(timerInterval);
+        const isFinal = currentLevelIdx === levels.length - 1;
+
+        if (isFinal) {
+            playClapping();
+            stopMusic();
+        }
+
+        document.getElementById('story-title').innerText = isFinal ? "DESTINY FULFILLED" : "SECTOR CLEARED";
+        document.getElementById('story-text').innerText = levels[currentLevelIdx].msg;
+        document.getElementById('story-btn').innerText = isFinal ? "RETURN TO TERMINAL [ENTER]" : "Next Sector [ENTER]";
+        document.getElementById('story-screen').classList.remove('hidden');
+    }
+
+    function handleStoryButton() {
+        if (currentLevelIdx === levels.length - 1) {
+            quitToMenu();
+        } else {
+            nextLevel();
+        }
+    }
+
+    function nextLevel() { if (currentLevelIdx < levels.length - 1) loadLevel(currentLevelIdx + 1); else loadLevel(0); }
+    function gameLoop() { draw(); requestAnimationFrame(gameLoop); }
+
+    function draw() {
+        if (!document.getElementById('title-screen').classList.contains('hidden')) return;
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+        for(let y=0; y<canvas.height/tileSize; y++){ for(let x=0; x<canvas.width/tileSize; x++){ ctx.strokeStyle = isEditorMode ? '#334155' : '#1e293b'; ctx.strokeRect(x*tileSize, y*tileSize, tileSize, tileSize); } }
+        walls.forEach(w => { ctx.fillStyle = '#1e293b'; ctx.fillRect(w.x*tileSize, w.y*tileSize, tileSize, tileSize); ctx.strokeStyle = '#334155'; ctx.strokeRect(w.x*tileSize + 4, w.y*tileSize + 4, tileSize - 8, tileSize - 8); });
+        if (exit.x !== -1) { ctx.save(); ctx.translate(exit.x * tileSize, exit.y * tileSize); ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3; ctx.strokeRect(5, 5, tileSize - 10, tileSize - 10); ctx.fillStyle = '#facc15'; ctx.font = `bold ${tileSize * 0.2}px monospace`; ctx.textAlign = 'center'; ctx.fillText("EXIT", tileSize/2, tileSize/2); ctx.restore(); }
+        holes.forEach(h => { ctx.fillStyle = '#020617'; ctx.fillRect(h.x*tileSize + 4, h.y*tileSize + 4, tileSize - 8, tileSize - 8); ctx.strokeStyle = '#ef4444'; ctx.strokeRect(h.x*tileSize + 6, h.y*tileSize + 6, tileSize - 12, tileSize - 12); });
+        filledHoles.forEach(f => { ctx.fillStyle = '#1e293b'; ctx.fillRect(f.x*tileSize + 2, f.y*tileSize + 2, tileSize - 4, tileSize - 4); ctx.strokeStyle = '#3b82f6'; ctx.strokeRect(f.x*tileSize + 6, f.y*tileSize + 6, tileSize - 12, tileSize - 12); });
+        rocks.forEach(r => { ctx.save(); ctx.translate(r.x*tileSize + tileSize/2, r.y*tileSize + tileSize/2); ctx.fillStyle = r.pushed ? '#1d4ed8' : '#64748b'; ctx.beginPath(); for(let i=0; i<8; i++) { const angle = (i * Math.PI) / 4; ctx.lineTo(Math.cos(angle)*(tileSize/2.4), Math.sin(angle)*(tileSize/2.4)); } ctx.closePath(); ctx.fill(); ctx.restore(); });
+        enemies.forEach(e => { ctx.save(); ctx.translate(e.x*tileSize + tileSize/2, e.y*tileSize + tileSize/2); ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.moveTo(0, -tileSize/3); ctx.lineTo(tileSize/3, tileSize/3); ctx.lineTo(-tileSize/3, tileSize/3); ctx.closePath(); ctx.fill(); ctx.restore(); });
+        if (princess) ctx.drawImage(princessImg, princess.x*tileSize, princess.y*tileSize, tileSize, tileSize);
+        if (player.x !== -1) ctx.drawImage(smackImg, player.x*tileSize + player.ox, player.y*tileSize + player.oy, tileSize, tileSize);
+    }
+
+    window.addEventListener('focus', async () => {
+        if (audioCtx && audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
+    });
+
+    window.onload = () => createLevelButtons();
+    window.addEventListener('keydown', e => {
+        const k = e.key.toLowerCase();
+        if (k === 'e') { toggleEditor(); return; }
+        if (isEditorMode) return;
+        if (k === 'enter' || e.code === 'Space') { if (!document.getElementById('title-screen').classList.contains('hidden')) startGame(); else if (!document.getElementById('story-screen').classList.contains('hidden')) handleStoryButton(); else if (!document.getElementById('fail-screen').classList.contains('hidden')) loadLevel(currentLevelIdx); return; }
+        if (k === 'arrowup' || k === 'w') movePlayer(0, -1); if (k === 'arrowdown' || k === 's') movePlayer(0, 1); if (k === 'arrowleft' || k === 'a') movePlayer(-1, 0); if (k === 'arrowright' || k === 'd') movePlayer(1, 0); if (k === 'r') loadLevel(currentLevelIdx);
+    });
+</script>
+</body>
+</html>
