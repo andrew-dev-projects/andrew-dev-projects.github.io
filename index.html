@@ -1,13 +1,67 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-</head>  
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Portal</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            color: #00ffcc;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 30px;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .game-link {
+            text-decoration: none;
+            color: white;
+            background: #333;
+            padding: 15px 25px;
+            border-radius: 8px;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 1px solid #444;
+            font-weight: bold;
+        }
+
+        .game-link:hover {
+            background: #00ffcc;
+            color: #1a1a1a;
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 255, 204, 0.3);
+        }
+    </style>
+</head>
 <body>
-<h1>Games:</h1>
-<a href="House_of_Mirrors.html">House of Mirrors</a>
-<br/>
-<a href="zombaro.html">Zombaro</a>  
-<br/>
-<a href="pushio.html">Pushio</a>
+
+    <h1>Games</h1>
+
+    <div class="game-container">
+        <a href="House_of_Mirrors.html" class="game-link">House of Mirrors</a>
+        <a href="zombaro.html" class="game-link">Zombaro</a>
+        <a href="pushio.html" class="game-link">Pushio</a>
+        <a href="Avoid_This_RPG.html" class="game-link">Avoid This RPG</a>
+    </div>
+
 </body>
 </html>
