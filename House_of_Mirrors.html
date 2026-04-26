@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOUSE OF MIRRORS v15</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; color: #00ffcc; }
+        canvas { display: block; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+        .hidden { display: none; }
+        .crt-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0) 50%);
+            background-size: 100% 4px; pointer-events: none; z-index: 100;
+        }
+        #sync-progress { width: 0%; height: 100%; background: #00ffcc; box-shadow: 0 0 20px #00ffcc; transition: width 0.1s; }
+        #timer-bar { width: 100%; height: 100%; background: #ff3333; box-shadow: 0 0 15px #ff0000; transition: width 0.1s linear; }
+        #minimap {
+            position: absolute; bottom: 20px; right: 20px;
+            width: 180px; height: 180px;
+            background: rgba(0, 10, 10, 0.95);
+            border: 2px solid #00ffcc;
+            pointer-events: none;
+        }
+        .timer-warning { animation: pulse-red 0.5s infinite alternate; color: #ff0000 !important; text-shadow: 0 0 10px #ff0000; }
+        @keyframes pulse-red {
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0.7; transform: scale(1.1); }
+        }
+        .scrap-counter { font-size: 10px; color: #00ffcc; margin-top: 5px; letter-spacing: 2px; }
+        .full-story { font-size: 12px; line-height: 1.6; color: #fff; max-width: 450px; text-align: left; background: rgba(0,10,10,0.9); padding: 25px; border: 1px solid #00ffcc; box-shadow: 0 0 30px rgba(0,255,204,0.1); }
+    </style>
+</head>
+<body>
+
+<div class="crt-overlay"></div>
+
+<div id="ui-layer" class="flex flex-col items-center justify-center">
+    <!-- TITLE SCREEN -->
+    <div id="screen-title" class="interactive flex flex-col items-center p-10 bg-black/95 border border-cyan-500 rounded max-w-lg shadow-[0_0_50px_rgba(0,255,204,0.2)]">
+        <h1 class="text-5xl font-black mb-2 tracking-tighter text-cyan-400 text-center">HOUSE OF MIRRORS</h1>
+        <p class="mb-6 text-cyan-700 text-center uppercase text-[10px] font-bold tracking-widest leading-tight">POST-SINGULARITY RECLAMATION FACILITY<br>SECTOR GRID v15.0 (SYNTHWAVE TENSION)</p>
+        
+        <button id="start-btn" class="w-full px-8 py-3 border border-cyan-400 hover:bg-cyan-400 hover:text-black font-bold transition-all mb-4 text-sm uppercase">Enter the Reflection</button>
+        
+        <div class="w-full mb-6">
+            <div class="text-[9px] text-cyan-800 mb-2 uppercase tracking-tighter font-bold text-center">Sector Selection</div>
+            <div id="level-select" class="grid grid-cols-5 gap-2"></div>
+        </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden w-full h-full flex flex-col justify-between p-6">
+        <div class="flex justify-between items-start">
+            <div class="bg-black/60 p-3 border-l-2 border-cyan-400">
+                <div id="level-display" class="text-[10px] text-cyan-600 font-bold mb-1 uppercase">SECTOR 1 / 10</div>
+                <div id="objective-text" class="text-sm font-bold uppercase tracking-widest">Searching for Exit...</div>
+                <div id="scrap-display" class="scrap-counter uppercase">Scraps Found: 0/3</div>
+                <button id="quit-btn" class="interactive mt-4 px-3 py-1 border border-cyan-900 text-[9px] text-cyan-800 hover:border-red-500 hover:text-red-500 transition-colors uppercase font-bold tracking-widest">Terminate Link</button>
+            </div>
+            
+            <div class="flex flex-col items-end">
+                <div id="timer-container" class="bg-black/80 p-4 border-2 border-red-600 min-w-[140px] text-right shadow-[0_0_20px_rgba(255,0,0,0.2)]">
+                    <div class="text-[9px] text-red-500 font-black uppercase tracking-widest mb-1">Stability Remaining</div>
+                    <div id="timer-seconds" class="text-4xl font-mono text-red-500 font-black leading-none">60.0</div>
+                    <div class="w-full h-2 bg-red-950 mt-2 overflow-hidden border border-red-900">
+                        <div id="timer-bar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <canvas id="minimap"></canvas>
+        
+        <div class="flex flex-col items-center w-full">
+            <div id="narrative-overlay" class="mb-4 text-cyan-500 text-[11px] font-bold uppercase tracking-widest text-center h-10 max-w-xl"></div>
+            <div id="npc-dialogue" class="mb-2 text-red-500 text-[10px] font-bold uppercase text-center h-4 opacity-90"></div>
+            <div class="flex flex-col items-center gap-1 mb-4">
+                <div id="sync-percent" class="text-[9px] text-cyan-400 font-bold">0%</div>
+                <div class="w-48 h-1 bg-cyan-950 border border-cyan-800 overflow-hidden">
+                    <div id="sync-progress"></div>
+                </div>
+            </div>
+            <div id="interaction-prompt" class="mt-4 text-[10px] tracking-[0.4em] text-cyan-400 animate-pulse hidden uppercase">Goal Localized - Hold Click to Synchronize</div>
+        </div>
+    </div>
+
+    <!-- WIN SCREEN -->
+    <div id="screen-win" class="hidden interactive flex flex-col items-center p-8 bg-black border-2 border-cyan-400 max-w-2xl">
+        <h2 id="win-title" class="text-4xl font-black mb-4 text-cyan-400 text-center uppercase">MIRROR ESCAPED</h2>
+        <div id="story-reveal" class="full-story mb-6"></div>
+        <button onclick="location.reload()" class="px-8 py-2 border border-cyan-400 hover:bg-cyan-400 hover:text-black font-bold text-sm uppercase">Re-Enter the Cycle</button>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="screen-lose" class="hidden interactive flex flex-col items-center p-12 bg-black border-2 border-red-600">
+        <h2 class="text-4xl font-black mb-1 text-red-500 text-center uppercase">SYNC LOST</h2>
+        <p class="text-[10px] text-red-900 mb-6 uppercase tracking-widest text-center">Temporal displacement threshold exceeded.<br>Subject reclaimed by the mirror.</p>
+        <button onclick="location.reload()" class="px-8 py-2 border border-red-600 text-red-500 hover:bg-red-600 hover:text-black font-bold text-sm uppercase">Retry Facility Access</button>
+    </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const AudioEngine = {
+    ctx: null, masterGain: null, reverb: null, isStarted: false,
+    async init() {
+        if (this.isStarted) { if (this.ctx && this.ctx.state !== 'running') await this.ctx.resume(); return; }
+        try {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+            this.reverb = this.ctx.createConvolver();
+            this.createReverb();
+            this.masterGain.connect(this.ctx.destination);
+            await this.ctx.resume();
+            this.isStarted = true;
+            this.startBassline();
+            this.startLeadSynths();
+        } catch (e) { console.error("Audio failed", e); }
+    },
+    createReverb() {
+        const length = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(2, length, this.ctx.sampleRate);
+        for (let i = 0; i < 2; i++) {
+            const data = buffer.getChannelData(i);
+            for (let j = 0; j < length; j++) data[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / length, 3);
+        }
+        this.reverb.buffer = buffer;
+        this.reverb.connect(this.masterGain);
+    },
+    startBassline() {
+        const sequence = [73.42, 73.42, 73.42, 82.41, 65.41, 65.41];
+        let step = 0;
+        const playBass = () => {
+            if (gameState !== 'playing' && gameState !== 'title') { setTimeout(playBass, 500); return; }
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            const filter = this.ctx.createBiquadFilter();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(sequence[step % sequence.length], now);
+            filter.type = 'lowpass'; filter.frequency.setValueAtTime(400, now);
+            g.gain.setValueAtTime(0, now);
+            g.gain.linearRampToValueAtTime(0.12, now + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+            osc.connect(filter); filter.connect(g); g.connect(this.masterGain);
+            osc.start(now); osc.stop(now + 0.5);
+            step++;
+            setTimeout(playBass, 250);
+        };
+        playBass();
+    },
+    startLeadSynths() {
+        const playLead = () => {
+            if (gameState !== 'playing' && gameState !== 'title') { setTimeout(playLead, 2000); return; }
+            const now = this.ctx.currentTime;
+            const freqs = [293.66, 349.23, 440.00];
+            const osc = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(freqs[Math.floor(Math.random() * freqs.length)], now);
+            g.gain.setValueAtTime(0, now);
+            g.gain.linearRampToValueAtTime(0.04, now + 2);
+            g.gain.linearRampToValueAtTime(0, now + 6);
+            osc.connect(g); g.connect(this.reverb);
+            osc.start(now); osc.stop(now + 6.1);
+            setTimeout(playLead, 8000 + Math.random() * 4000);
+        };
+        playLead();
+    },
+    playClick() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine'; osc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+        g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+        osc.connect(g); g.connect(this.masterGain);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.1);
+    },
+    playLevelUp() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [440, 880].forEach(f => {
+            const o = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            o.frequency.setValueAtTime(f, now);
+            g.gain.setValueAtTime(0.2, now);
+            g.gain.linearRampToValueAtTime(0, now + 0.5);
+            o.connect(g); g.connect(this.reverb);
+            o.start(); o.stop(now + 0.5);
+        });
+    }
+};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const mapCanvas = document.getElementById('minimap');
+const mctx = mapCanvas.getContext('2d');
+
+let width, height, lastTime = 0, gameState = 'title', currentLevel = 0, puzzleProgress = 0, isInteracting = false;
+let levelTimeLeft = 60, levelTotalTime = 60, scrapsCollected = 0;
+let lockRequestPending = false;
+const collectedFlags = { 2: false, 5: false, 8: false };
+
+const storyParts = {
+    2: "LOG 01: THE MIRROR WAS FOUND, NOT BUILT. A WINDOW INTO A DEAD PROBABILITY.",
+    5: "LOG 02: THE REFLECTION IS PULLING IDENTITY. THE STAFF BECOME... INVERTED.",
+    8: "LOG 03: EXITING IS NOT RETURNING HOME. IT IS JUST CHOOSING A BETTER LIE."
+};
+
+const hostileNpcLines = [
+    "YOU DON'T BELONG IN THE GLASS.",
+    "GET OUT. WHILE YOU STILL HAVE A FACE.",
+    "WE ARE THE ERRORS YOU IGNORED.",
+    "YOUR SKIN IS TOO LOUD.",
+    "WHY DO YOU STILL BREATHE OUR CODE?",
+    "YOU ARE JUST A LEAK IN THE SYSTEM.",
+    "STAY HERE. ROT WITH US."
+];
+
+const player = { x: 1.5, z: 1.5, rotX: 0, rotY: 0, radius: 0.2, moveSpeed: 0.08, lookSensitivity: 0.002 };
+const keys = {};
+document.addEventListener('keydown', (e) => keys[e.code] = true);
+document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement === canvas) {
+        player.rotY += e.movementX * player.lookSensitivity;
+        player.rotX += e.movementY * player.lookSensitivity; 
+        player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX));
+    }
+});
+
+const generateLevel = (idx) => {
+    const size = 11 + (idx * 2); 
+    const maze = Array(size).fill().map(() => Array(size).fill(1));
+    const carve = (x, z) => {
+        maze[x][z] = 0;
+        const dirs = [[0,2],[0,-2],[2,0],[-2,0]].sort(() => Math.random() - 0.5);
+        for(let [dx, dz] of dirs) {
+            let nx = x + dx, nz = z + dz;
+            if(nx > 0 && nx < size-1 && nz > 0 && nz < size-1 && maze[nx][nz] === 1) {
+                maze[x + dx/2][z + dz/2] = 0; carve(nx, nz);
+            }
+        }
+    };
+    carve(1, 1);
+    let goalX = size - 2, goalZ = size - 2;
+    if(maze[goalX][goalZ] === 1) maze[goalX][goalZ] = 0;
+    const walls = [];
+    for(let x=0; x<size; x++) for(let z=0; z<size; z++) if(maze[x][z] === 1) walls.push({x, z});
+    
+    let scrap = null;
+    const scrapId = idx + 1;
+    if (storyParts[scrapId]) {
+        let sx, sz;
+        let attempts = 0;
+        do { 
+            sx = Math.floor(Math.random()*(size-2))+1; 
+            sz = Math.floor(Math.random()*(size-2))+1; 
+            attempts++;
+        } while ((maze[sx][sz] === 1 || (sx < 4 && sz < 4)) && attempts < 100);
+        
+        scrap = { x: sx + 0.5, z: sz + 0.5, content: storyParts[scrapId], id: scrapId };
+    }
+
+    // Generate NPCs ONLY in Level 4 (idx 3) and Level 7 (idx 6)
+    const npcs = [];
+    if (idx === 3 || idx === 6) {
+        const npcCount = 3 + idx;
+        for(let i=0; i<npcCount; i++) {
+            let nx, nz;
+            let nAtt = 0;
+            do {
+                nx = Math.floor(Math.random()*(size-2))+1;
+                nz = Math.floor(Math.random()*(size-2))+1;
+                nAtt++;
+            } while((maze[nx][nz] === 1 || (nx < 4 && nz < 4)) && nAtt < 100);
+            npcs.push({ 
+                x: nx + 0.5, z: nz + 0.5, 
+                line: hostileNpcLines[Math.floor(Math.random()*hostileNpcLines.length)],
+                offset: Math.random() * Math.PI * 2
+            });
+        }
+    }
+
+    return { name: `SECTOR ${idx + 1}`, color: `hsl(${idx * 30 + 180}, 80%, 40%)`, maze, walls, goal: {x: goalX + 0.5, z: goalZ + 0.5}, size, scrap, npcs };
+};
+
+let levelData = generateLevel(0);
+const lsContainer = document.getElementById('level-select');
+for(let i=0; i<10; i++) {
+    const btn = document.createElement('button');
+    btn.className = "interactive p-1 border border-cyan-900 text-xs hover:bg-cyan-400 hover:text-black transition-colors";
+    btn.innerText = i + 1;
+    btn.onclick = async () => { currentLevel = i; await AudioEngine.init(); startGame(); };
+    lsContainer.appendChild(btn);
+}
+
+function resize() { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+function project(x, y, z) {
+    const cosY = Math.cos(player.rotY), sinY = Math.sin(player.rotY);
+    const cosX = Math.cos(player.rotX), sinX = Math.sin(player.rotX);
+    let tx = x - player.x, ty = y - 0.2, tz = z - player.z;
+    let x1 = tx * cosY - tz * sinY;
+    let z1 = tx * sinY + tz * cosY;
+    let y2 = ty * cosX - z1 * sinX;
+    let z2 = ty * sinX + z1 * cosX;
+    if (z2 <= 0.05) return null;
+    const s = (height * 0.8) / z2;
+    return { x: width/2 + x1*s, y: height/2 + y2*s, s: s };
+}
+
+function isWallAt(x, z) {
+    const ix = Math.floor(x), iz = Math.floor(z);
+    if(ix < 0 || ix >= levelData.size || iz < 0 || iz >= levelData.size) return true;
+    return levelData.maze[ix][iz] === 1;
+}
+
+function tryLockPointer() {
+    if (lockRequestPending || document.pointerLockElement === canvas) return;
+    lockRequestPending = true;
+    setTimeout(() => {
+        canvas.requestPointerLock();
+        lockRequestPending = false;
+    }, 100);
+}
+
+function update(dt) {
+    if(gameState !== 'playing') return;
+    levelTimeLeft -= dt / 1000;
+    
+    if (levelTimeLeft < 15) document.getElementById('timer-container').classList.add('timer-warning');
+    else document.getElementById('timer-container').classList.remove('timer-warning');
+
+    if (levelTimeLeft <= 0) {
+        gameState = 'lose'; 
+        if (document.pointerLockElement) document.exitPointerLock();
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('screen-lose').classList.remove('hidden');
+    }
+
+    const cosY = Math.cos(player.rotY), sinY = Math.sin(player.rotY);
+    let mx = 0, mz = 0;
+    if(keys['KeyW']) { mx += sinY; mz += cosY; }
+    if(keys['KeyS']) { mx -= sinY; mz -= cosY; }
+    if(keys['KeyA']) { mx -= cosY; mz += sinY; }
+    if(keys['KeyD']) { mx += cosY; mz -= sinY; }
+    
+    if(mx !== 0 || mz !== 0) {
+        const mag = Math.sqrt(mx*mx + mz*mz);
+        const step = player.moveSpeed * (dt/16);
+        const vx = (mx/mag) * step, vz = (mz/mag) * step;
+        if(!isWallAt(player.x + vx + (vx > 0 ? 0.2 : -0.2), player.z)) player.x += vx;
+        if(!isWallAt(player.x, player.z + vz + (vz > 0 ? 0.2 : -0.2))) player.z += vz;
+    }
+
+    // NPC Logic
+    const npcDisplay = document.getElementById('npc-dialogue');
+    let nearNpc = false;
+    levelData.npcs.forEach(n => {
+        const distSq = (player.x - n.x)**2 + (player.z - n.z)**2;
+        if (distSq < 1.5) {
+            npcDisplay.innerText = n.line;
+            nearNpc = true;
+        }
+    });
+    if(!nearNpc) npcDisplay.innerText = "";
+
+    if (levelData.scrap && !collectedFlags[levelData.scrap.id]) {
+        const sDist = Math.sqrt((player.x - levelData.scrap.x)**2 + (player.z - levelData.scrap.z)**2);
+        if (sDist < 0.6) {
+            collectedFlags[levelData.scrap.id] = true;
+            scrapsCollected++; AudioEngine.playClick();
+            document.getElementById('scrap-display').innerText = `Scraps Found: ${scrapsCollected}/3`;
+            const narrative = document.getElementById('narrative-overlay');
+            if (levelData.scrap.content) {
+                narrative.innerText = levelData.scrap.content;
+                const activeText = levelData.scrap.content;
+                setTimeout(() => { if(narrative.innerText === activeText) narrative.innerText = ""; }, 20000);
+            }
+        }
+    }
+
+    const dist = Math.sqrt((player.x - levelData.goal.x)**2 + (player.z - levelData.goal.z)**2);
+    if(dist < 0.8) {
+        document.getElementById('interaction-prompt').classList.remove('hidden');
+        if(isInteracting) {
+            puzzleProgress += dt * 0.1;
+            if(puzzleProgress >= 100) nextLevel();
+        }
+    } else { document.getElementById('interaction-prompt').classList.add('hidden'); isInteracting = false; }
+
+    document.getElementById('sync-progress').style.width = puzzleProgress + "%";
+    document.getElementById('sync-percent').innerText = Math.floor(puzzleProgress) + "%";
+    document.getElementById('timer-seconds').innerText = Math.max(0, levelTimeLeft).toFixed(1);
+    document.getElementById('timer-bar').style.width = (levelTimeLeft / levelTotalTime * 100) + "%";
+}
+
+function drawMinimap() {
+    mctx.fillStyle = "#000808"; mctx.fillRect(0,0,180,180);
+    const s = 180 / levelData.size;
+    for(let x=0; x<levelData.size; x++) {
+        for(let z=0; z<levelData.size; z++) if(levelData.maze[x][z] === 1) { mctx.fillStyle = levelData.color + "33"; mctx.fillRect(x*s, z*s, s, s); }
+    }
+    mctx.fillStyle = levelData.color; mctx.fillRect(levelData.goal.x*s-3, levelData.goal.z*s-3, 6, 6);
+    if (levelData.scrap && !collectedFlags[levelData.scrap.id]) { mctx.fillStyle = "#fff"; mctx.fillRect(levelData.scrap.x*s-2, levelData.scrap.z*s-2, 4, 4); }
+    
+    // Draw NPC icons (only if they exist)
+    levelData.npcs.forEach(n => {
+        mctx.fillStyle = "rgba(255, 50, 50, 0.6)";
+        mctx.beginPath(); mctx.arc(n.x*s, n.z*s, 2.5, 0, Math.PI*2); mctx.fill();
+    });
+
+    mctx.fillStyle = "#fff"; mctx.beginPath(); mctx.arc(player.x*s, player.z*s, 3, 0, Math.PI*2); mctx.fill();
+}
+
+function drawScene() {
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, width, height);
+    const time = Date.now() * 0.001;
+    ctx.strokeStyle = levelData.color; ctx.lineWidth = 1.2;
+
+    levelData.walls.forEach(w => {
+        const distSq = (w.x+0.5 - player.x)**2 + (w.z+0.5 - player.z)**2;
+        if(distSq > 120) return; 
+        [[0,0],[1,0],[1,1],[0,1]].forEach((c, i, arr) => {
+            const n = arr[(i+1)%4];
+            const p1 = project(w.x+c[0], 1.2, w.z+c[1]), p2 = project(w.x+n[0], 1.2, w.z+n[1]);
+            const p3 = project(w.x+c[0], -1.2, w.z+c[1]), p4 = project(w.x+n[0], -1.2, w.z+n[1]);
+            if(p1 && p2) { ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); if(p3 && p4) { ctx.lineTo(p4.x, p4.y); ctx.lineTo(p3.x, p3.y); ctx.closePath(); } ctx.stroke(); }
+        });
+    });
+
+    // Draw Hostile NPCs
+    levelData.npcs.forEach(n => {
+        const distSq = (n.x - player.x)**2 + (n.z - player.z)**2;
+        if(distSq > 100) return;
+        
+        // Hostile glitched appearance
+        const flick = Math.random() > 0.85 ? 0 : 1;
+        if(!flick) return;
+
+        const h = 0.6 + Math.sin(time*5 + n.offset)*0.15;
+        // Reddish hue for hostile NPCs
+        ctx.beginPath(); ctx.strokeStyle = "rgba(255, 80, 80, 0.4)";
+        const pT = project(n.x, h, n.z), pB = project(n.x, -h, n.z);
+        const pL = project(n.x - 0.25, 0, n.z), pR = project(n.x + 0.25, 0, n.z);
+        
+        if(pT && pB && pL && pR) {
+            ctx.moveTo(pT.x, pT.y); ctx.lineTo(pR.x, pR.y); ctx.lineTo(pB.x, pB.y); ctx.lineTo(pL.x, pL.y); ctx.closePath();
+            ctx.stroke();
+            // Glitch horizontal lines
+            if (Math.random() > 0.9) {
+                ctx.moveTo(pL.x - 20, pL.y); ctx.lineTo(pR.x + 20, pR.y); ctx.stroke();
+            }
+        }
+    });
+
+    if (levelData.scrap && !collectedFlags[levelData.scrap.id]) {
+        const s = levelData.scrap, bob = Math.sin(time*5)*0.1;
+        ctx.beginPath(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1;
+        [[-0.2,-0.2],[0.2,-0.2],[0.2,0.2],[-0.2,0.2]].forEach((c, i, arr) => {
+            const p1 = project(s.x+c[0], -0.2+bob, s.z+c[1]), p2 = project(s.x+arr[(i+1)%4][0], -0.2+bob, s.z+arr[(i+1)%4][1]);
+            if(p1 && p2) { if(i===0) ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); }
+        });
+        ctx.stroke();
+    }
+
+    const g = levelData.goal, gS = 0.4, v = [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+    ctx.beginPath(); ctx.strokeStyle = "#00ffcc";
+    [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]].forEach(edge => {
+        const r = (p) => {
+            let ry = p[1]*Math.cos(time) - p[2]*Math.sin(time), rz = p[1]*Math.sin(time) + p[2]*Math.cos(time);
+            let rx = p[0]*Math.cos(time) - rz*Math.sin(time); rz = p[0]*Math.sin(time) + rz*Math.cos(time);
+            return [g.x + rx*gS, ry*gS, g.z + rz*gS];
+        };
+        const p1 = project(...r(v[edge[0]])), p2 = project(...r(v[edge[1]]));
+        if(p1 && p2) { ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); }
+    });
+    ctx.stroke();
+}
+
+function nextLevel() {
+    AudioEngine.playLevelUp(); puzzleProgress = 0; currentLevel++;
+    if(currentLevel >= 10) {
+        gameState = 'win'; 
+        if (document.pointerLockElement) document.exitPointerLock();
+        document.getElementById('hud').classList.add('hidden');
+        const winScreen = document.getElementById('screen-win');
+        const storyBox = document.getElementById('story-reveal');
+        const title = document.getElementById('win-title');
+        winScreen.classList.remove('hidden');
+
+        if (scrapsCollected === 3) {
+            title.innerText = "FULL RECLAMATION ACHIEVED";
+            title.className = "text-4xl font-black mb-4 text-cyan-400 text-center uppercase animate-pulse";
+            storyBox.innerHTML = `
+                <div class="text-cyan-400 font-bold mb-2 uppercase">Accessing Encrypted Blackbox...</div>
+                <p class="mb-4 text-white text-[11px] leading-relaxed italic opacity-80">
+                    "The mirror didn't just reflect our world; it cataloged our choices. The 10th Sector is the point of no return. 
+                    By collecting the fragmented logs, you have reconstructed the Prime Sequence."
+                </p>
+                <div class="border-t border-cyan-900 pt-4 space-y-4">
+                    <p>${storyParts[2]}</p>
+                    <p>${storyParts[5]}</p>
+                    <p>${storyParts[8]}</p>
+                    <p class="pt-2 text-cyan-400 font-black border-t border-cyan-900 uppercase">
+                        Final Summary: You are the first to exit with your identity intact. 
+                        Welcome back to the reality you left. Or perhaps, the one you just created.
+                    </p>
+                </div>`;
+        } else {
+            title.innerText = "PARTIAL SYNC ESCAPE";
+            title.className = "text-4xl font-black mb-4 text-yellow-600 text-center uppercase";
+            const missed = [];
+            if(!collectedFlags[2]) missed.push("Sector 2");
+            if(!collectedFlags[5]) missed.push("Sector 5");
+            if(!collectedFlags[8]) missed.push("Sector 8");
+            storyBox.innerHTML = `
+                <div class="text-yellow-600 font-bold mb-2 text-sm uppercase tracking-tighter">Warning: Data Corruption Detected</div>
+                <p class="mb-4">You escaped the House of Mirrors, but parts of your memory remain trapped in the glass.</p>
+                <p class="text-xs text-gray-400">Missing Narrative Fragments detected in:</p>
+                <ul class="list-disc list-inside text-cyan-500 mb-4 font-bold uppercase tracking-widest">
+                    ${missed.map(m => `<li>${m}</li>`).join('')}
+                </ul>
+                <p class="italic text-[10px] text-gray-500">Collect all 3 logs to reconstruct the facility's true purpose.</p>`;
+        }
+        return;
+    }
+    loadLevel();
+}
+
+function loadLevel() {
+    levelData = generateLevel(currentLevel); player.x = 1.5; player.z = 1.5;
+    levelTotalTime = 60 - currentLevel; levelTimeLeft = levelTotalTime;
+    document.getElementById('level-display').innerText = `SECTOR ${currentLevel + 1} / 10`;
+    document.getElementById('sync-progress').style.backgroundColor = levelData.color;
+    document.getElementById('scrap-display').innerText = `Scraps Found: ${scrapsCollected}/3`;
+}
+
+function startGame() {
+    gameState = 'playing'; document.getElementById('screen-title').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden'); loadLevel(); 
+    tryLockPointer();
+}
+
+function quitGame() {
+    gameState = 'title';
+    if (document.pointerLockElement) document.exitPointerLock();
+    document.getElementById('hud').classList.add('hidden');
+    document.getElementById('screen-title').classList.remove('hidden');
+    scrapsCollected = 0;
+    for(let key in collectedFlags) collectedFlags[key] = false;
+}
+
+document.getElementById('start-btn').addEventListener('click', async () => { await AudioEngine.init(); startGame(); });
+document.getElementById('quit-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    quitGame();
+});
+
+function loop(t) { const dt = t - lastTime || 0; lastTime = t; if(gameState === 'playing') { update(dt); drawScene(); drawMinimap(); } requestAnimationFrame(loop); }
+window.addEventListener('mousedown', async (e) => { 
+    if (!AudioEngine.isStarted) await AudioEngine.init(); 
+    if (gameState === 'playing') { 
+        if (e.target.tagName !== 'BUTTON') {
+            isInteracting = true; 
+            tryLockPointer();
+        }
+    } 
+});
+canvas.addEventListener('mouseup', () => { isInteracting = false; });
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
