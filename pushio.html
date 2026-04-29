@@ -92,8 +92,22 @@
             border: 2px solid transparent;
             cursor: pointer;
             display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: bold;
             border-radius: 4px;
+        }
+        .palette-item svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+        .editor-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .editor-action-btn svg {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
         }
         .palette-item.active { border-color: #facc15; box-shadow: 0 0 10px #facc15; }
     </style>
@@ -139,15 +153,35 @@
     </div>
 
     <div id="editor-ui" class="editor-palette hidden">
-        <div class="palette-item bg-slate-700 active" onclick="setBrush('.')" data-type=".">.</div>
-        <div class="palette-item bg-slate-600" onclick="setBrush('W')" data-type="W">W</div>
-        <div class="palette-item bg-red-500" onclick="setBrush('S')" data-type="S">S</div>
-        <div class="palette-item bg-blue-500" onclick="setBrush('R')" data-type="R">R</div>
-        <div class="palette-item bg-black border-red-500" onclick="setBrush('H')" data-type="H">H</div>
-        <div class="palette-item bg-red-900" onclick="setBrush('M')" data-type="M">M</div>
-        <div class="palette-item bg-yellow-500" onclick="setBrush('E')" data-type="E">E</div>
-        <button class="text-[10px] bg-blue-700 px-3 py-1 ml-4 rounded font-bold" onclick="playTestLevel()">PLAY TEST</button>
-        <button class="text-[10px] bg-green-700 px-3 py-1 rounded font-bold" onclick="exportLevel()">EXPORT</button>
+        <div class="palette-item bg-slate-700 text-slate-200 active" onclick="setBrush('.')" data-type="." title="Erase / floor">
+            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12l8-8M6 6l6 6"/><rect x="3" y="3" width="12" height="12" rx="1" stroke-dasharray="2 2"/></svg>
+        </div>
+        <div class="palette-item bg-slate-600 text-slate-100" onclick="setBrush('W')" data-type="W" title="Wall">
+            <svg viewBox="0 0 18 18" fill="currentColor" aria-hidden="true"><path d="M1 2h7v5H1V2zm9 0h7v5h-7V2zM5 8h7v5H5V8zm-4 0h4v5H1V8zm9 0h7v5h-7V8z"/></svg>
+        </div>
+        <div class="palette-item bg-red-500 text-white" onclick="setBrush('S')" data-type="S" title="Start (player)">
+            <svg viewBox="0 0 18 18" fill="currentColor" aria-hidden="true"><circle cx="9" cy="5" r="2.5"/><path d="M6 8.5h6v1H6v-1zm-1 2h8v5H5v-5z"/></svg>
+        </div>
+        <div class="palette-item bg-blue-500 text-white" onclick="setBrush('R')" data-type="R" title="Rock">
+            <svg viewBox="0 0 18 18" fill="currentColor" aria-hidden="true"><path d="M9 2.5l5.2 3v6L9 15.5l-5.2-3v-6L9 2.5z"/></svg>
+        </div>
+        <div class="palette-item bg-black border-red-500 text-red-400" onclick="setBrush('H')" data-type="H" title="Hole">
+            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="9" r="5"/></svg>
+        </div>
+        <div class="palette-item bg-red-900 text-red-100" onclick="setBrush('M')" data-type="M" title="Enemy">
+            <svg viewBox="0 0 18 18" fill="currentColor" aria-hidden="true"><path d="M4 6h10v2H4V6zm1 3h1.5v3H5V9zm6.5 0H13v3h-1.5V9zM6 14h6v1.5H6V14z"/><circle cx="7" cy="7.5" r="1"/><circle cx="11" cy="7.5" r="1"/></svg>
+        </div>
+        <div class="palette-item bg-yellow-500 text-slate-900" onclick="setBrush('E')" data-type="E" title="Exit">
+            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 15V6a2 2 0 012-2h6a2 2 0 012 2v9"/><path stroke-linecap="round" d="M7 8h4M7 11h2"/></svg>
+        </div>
+        <button type="button" class="editor-action-btn text-[10px] bg-blue-700 text-white px-3 py-1 ml-4 rounded font-bold" onclick="saveLevel()" title="Save and play">
+            <svg viewBox="0 0 18 18" fill="currentColor" aria-hidden="true"><path d="M4 2h8l3 3v11a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2zm0 2v4h6V4H4zm2 6v6h6v-6H6z"/></svg>
+            SAVE
+        </button>
+        <button type="button" class="editor-action-btn text-[10px] bg-green-700 text-white px-3 py-1 rounded font-bold" onclick="exportLevel()" title="Export level string">
+            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 3v9M5.5 7.5L9 11l3.5-3.5"/><path d="M4 14h10"/></svg>
+            EXPORT
+        </button>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -200,21 +234,31 @@
         return g.map(r => r.join(''));
     }
 
-    const levels = [
-        { grid: ["WWWWWWWW","W.....RW","W.S..R.W","W....R.W","W..RR..W","W..R.E.W","WWWWWWWW"], msg: "Welcome to PUSHIO." },
-        { grid: ["WWWWWWWWWW","W.........","W-------EW","W........W","WHHHHHHHHW","WRRRRRRRRW","W........W","W...S....W","WWWWWWWWWW"], msg: "The Great Divide." },
-        { grid: ["WWWWWWWWW","W.W.....W","WSW.WWW.W","W...R.R.W","WWWWWWW.W","W.HRHR..W","W.WWWWWWW","W...E...W","WWWWWWWWW"], msg: "Zig Zag Protocol." },
-        { grid: ["WWWWWWWW","W...RREW","W.WRR..W","WSW.RRHW","W.WR.RHW","W.WRRRHW","WWWWWWWW"], msg: "Storage Facility." },
-        { grid: ["WWWWWWWW", "W..S...W", "W.R.R..W", "W.H.H..W", "W.M....W", "W...E..W", "WWWWWWWW"], msg: "Patrol Zone." },
-        { grid: ["WWWWWWWWWW", "WS.M....EW", "W..RRR..HW", "W..HHH..HW", "W..RRR..HW", "W..M....HW", "WWWWWWWWWW"], msg: "Heavy Traffic." },
-        { grid: ["WWWWWWWWWWW","W..HW..R.EW","W....H.R..W","W......R..W","WHRRRR..RRW","W.....W...W","W......R..W","WWRR...R..W","W...R.HR..W","WS..W..RH.W","WWWWWWWWWWW"], msg: "Sector 07: Infrastructure Overload." },
-        { grid: ["WWWWWWWWWWW","W..M...R.EW","W......MR.W","W..M.....RW","W......M..W","W..MW.H.H.W","W...W..M..W","W..HM.....W","WR...H..M.W","WS........W","WWWWWWWWWWW"], msg: "Sector 08: Sentinel Swarm." },
-        ...Array.from({length: 11}, (_, i) => ({
-            grid: generateComplexLevel(i + 9),
-            msg: `Sector ${i+9}: Deep Infrastructure.`
-        })),
-        { grid: ["WWWWWWW", "W.P...W", "WHHHHHW", "WRRRRRW", "W.....W", "W  S  W", "WWWWWWW"], msg: "You made it, Soldier...\n\nYou have no idea how long I've been trapped within these cold, cobalt circuits. The Sentinels... they weren't always like this. They were built to protect the core, but the deeper we dug into the infrastructure, the more the machines began to remember. They remembered the silence before the push.\n\nBy resetting the weight-sensors in these twenty sectors, you've stabilized the atmospheric pressure. The surface will be reachable again. But the PUSHIO mission never truly ends—there are more layers beneath us, more forgotten memories to shift. For now, rest. The main terminal is secured.\n\nThank you for coming back for me." }
-    ];
+	const levels = [
+		{ grid: ["WWWWWWWW","W.....RW","W.S..R.W","W....R.W","W..RR..W","W..R.E.W","WWWWWWWW"], msg: "Sector 01: Welcome to PUSHIO." },
+		{ grid: ["WWWWWWWWWW","W.........","W-------EW","W........W","WHHHHHHHHW","WRRRRRRRRW","W........W","W...S....W","WWWWWWWWWW"], msg: "Sector 02: The Great Divide." },
+		{ grid: ["WWWWWWWWW","W.W.....W","WSW.WWW.W","W...R.R.W","WWWWWWW.W","W.HRHR..W","W.WWWWWWW","W...E...W","WWWWWWWWW"], msg: "Sector 03: Zig Zag Protocol." },
+		{ grid: ["WWWWWWWW","W...RREW","W.WRR..W","WSW.RRHW","W.WR.RHW","W.WRRRHW","WWWWWWWW"], msg: "Sector 04: Storage Facility." },
+		{ grid: ["WWWWWWWW", "W..S...W", "W.R.R..W", "W.H.H..W", "W.M....W", "W...E..W", "WWWWWWWW"], msg: "Sector 05: Patrol Zone." },
+		
+        { grid: ["WWWWWWWWWW", "WS.M....EW", "W..RRR..HW", "W..HHH..HW", "W..RRR..HW", "W..M....HW", "WWWWWWWWWW"], msg: "Sector 06: Heavy Traffic." },
+		{ grid: ["WWWWWWWWWWW","W..HW..R.EW","W....H.R..W","W......R..W","WHRRRR..RRW","W.....W...W","W......R..W","WWRR...R..W","W...R.HR..W","WS..W..RH.W","WWWWWWWWWWW"], msg: "Sector 07: Infrastructure Overload." },
+		{ grid: ["WWWWWWWWWWW","W..M...R.EW","W......MR.W","W..M.....RW","W......M..W","W..MW.H.H.W","W...W..M..W","W..HM.....W","WR...H..M.W","WS........W","WWWWWWWWWWW"], msg: "Sector 08: Sentinel Swarm." },
+		{ grid: ["WWWWWWWWWWW","WW.HRHWH.EW","W.HRH.H.H.W","WH.HRH.HRHW","WWWRWWHRHWW","WH.H.WRHRHW","W.HRHWHRHRW","WH.HRHWW.HW","W.HRHRH.HRW","WSRH.HRHRHW","WWWWWWWWWWW"], msg: "Sector 09: The Filter." },
+		{ grid: ["WWWWWWWWWWW","W.....H..EW","WH..H.H.HHW","WHH.H.H...W","WR..H.H.H.W","WHRHH.....W","WRWWWWWWWWW","W........MW","WWWWWWW.WWW","WM.S......W","WWWWWWWWWWW"], msg: "Sector 10: Logic Gate." },
+		
+        { grid: ["WWWWWWWWWWW","WM...S...MW","WM.......MW","WM.......MW","WRRRRRRRRRW","WHHHHHHHHHW","WM.......MW","WM.......MW","WM.......MW","WM...E...MW","WWWWWWWWWWW"], msg: "Sector 11: Narrow Corridor." },
+		{ grid: ["WWWWWWWWWWW","W..M...R.EW","W......MR.W","W.WWWWWWWRW","W......M..W","W..MWHH.H.W","WWWWW.WM..W","WHHHH.....W","WRRRRHHHHHW","WS.......MW","WWWWWWWWWWW"], msg: "Sector 12: Pressure Plate." },
+		{ grid: ["WWWWWWWWWWW","W..M...R.EW","W....H.MR.W","W..M.H...RW","W....H....W","W..MWHHMHMW","W...WH....W","W..HMHM...W","WR...H..M.W","WS........W","WWWWWWWWWWW"], msg: "Sector 13: Parallel Processing." },
+		{ grid: ["WWWWWWWWWWW","W.........W","W.W.W.W.W.W","W.WMW.W.WMW","W...WSW...W","W.WWWWWWW.W","W...WEW...W","W.WMW.WMW.W","W.W.W.W.W.W","W.....M...W","WWWWWWWWWWW"], msg: "Sector 14: The Core Chamber." },
+		{ grid: ["EWWWWWWWW.W","HW..RH.....","RW.WWWWWW.W",".W.W....W.W",".W.W.WW.WRW",".W.W.SW.WHW",".W.WWWW.W.W",".W..HR..W.W","..WWWWWWW.W","H...HH....W","WWW....WWHW"], msg: "Sector 15: De-fragmentation." },
+		
+        { grid: ["S..........","....M.....M",".......M...",".M.........","....M...M..","..........M","...M....M..","......M....",".M...M.....","....M......","...M......E"], msg: "Sector 16: Checkerboard." },
+		{ grid: ["SRHRHRHRHRHRHR","R.R.R.R.R.R.R.","HR.R.RRRRR.RRR","R.RRR.R.R.RRR.","HR.R.R.R.R.R.R","R.R.R.RRR.R.R.","HRRR.R.R.R.RRR","R.R.RRR.R.R.R.","HR.R.R.R.R.R.R","R.RRR.R.R.R.RR","HR.R.R.R.RRR.R","R.R.RRR.R.R.R.","HR.R.R.R.R.R.R","RRR.R.R.R..RHE"], msg: "Sector 17: Symmetry Error." },
+		{ grid: ["W......WWWWWWW",".W..W...WWWWW.","H..W.W...WWW..","..W...WH..W...",".W...W...W..W.",".W..EW.HW..WW.",".W..W..W..WW..","..W...W..WW..W","H..W.W..W...WW",".W..W..W.S.WWW","W..W..W.....WW","..H..W..WW...W",".HR.W..WWWW...","W..W..WWWWWWW."], msg: "Sector 18: Inner Sanctum." },
+		{ grid: ["WWWWWWWWWWW","WEM...M.MWW","W.WM...M.MW","WM.WM...M.W","W.M.WM...MW","W..M.WM...W","W...M.WM.MW","WM...M.MWWW","W.M.M.W...W","WW.M.M.MWSW","WWWWWWWWWWW"], msg: "Sector 19: Final Approach." },
+		{ grid: ["WWWWWWW", "W.P...W", "WHHHHHW", "WRRRRRW", "W.....W", "W  S  W", "WWWWWWW"], msg: "You made it, Soldier...\n\nYou have no idea how long I've been trapped within these cold, cobalt circuits..." }
+	];
 
     const smackImg = new Image();
     smackImg.src = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="15" width="80" height="80" fill="#fca" stroke="#991b1b" stroke-width="4"/><rect x="10" y="15" width="80" height="30" fill="#ef4444"/><text x="50" y="38" font-size="20" text-anchor="middle" fill="white" font-weight="400" font-family="Arial, sans-serif">YEAH!</text><circle cx="35" cy="65" r="5" fill="#000"/><circle cx="65" cy="65" r="5" fill="#000"/><path d="M 35 80 Q 50 90 65 80" fill="none" stroke="#000" stroke-width="4"/></svg>')}`;
@@ -359,23 +403,10 @@
         });
     }
 
-    function playTestLevel() {
-        if (player.x === -1 || exit.x === -1) {
-            const timerLabel = document.getElementById('timer-label');
-            timerLabel.innerText = "NEED START & EXIT";
-            setTimeout(() => timerLabel.innerText = "EDITOR", 2000);
-            return;
-        }
-        isEditorMode = false;
-        document.getElementById('editor-ui').classList.add('hidden');
-        filledHoles = [];
-        startTimer();
-    }
-
-    function exportLevel() {
+    function buildEditorGrid() {
         const w = Math.round(canvas.width / tileSize);
         const h = Math.round(canvas.height / tileSize);
-        if (w <= 0 || h <= 0) return;
+        if (w <= 0 || h <= 0) return null;
         let grid = Array(h).fill().map(() => Array(w).fill('.'));
         walls.forEach(o => grid[o.y][o.x] = 'W');
         holes.forEach(o => grid[o.y][o.x] = 'H');
@@ -383,7 +414,30 @@
         enemies.forEach(o => grid[o.y][o.x] = 'M');
         if (exit.x !== -1) grid[exit.y][exit.x] = 'E';
         if (player.x !== -1) grid[player.y][player.x] = 'S';
-        const output = JSON.stringify(grid.map(row => row.join('')));
+        return grid.map(row => row.join(''));
+    }
+
+    function saveLevel() {
+        if (player.x === -1 || exit.x === -1) {
+            const timerLabel = document.getElementById('timer-label');
+            timerLabel.innerText = "NEED START & EXIT";
+            setTimeout(() => timerLabel.innerText = "EDITOR", 2000);
+            return;
+        }
+        const built = buildEditorGrid();
+        if (built) {
+            levels[currentLevelIdx].grid = built;
+        }
+        isEditorMode = false;
+        document.getElementById('editor-ui').classList.add('hidden');
+        filledHoles = [];
+        loadLevel(currentLevelIdx);
+    }
+
+    function exportLevel() {
+        const built = buildEditorGrid();
+        if (!built) return;
+        const output = JSON.stringify(built);
         
         const textArea = document.createElement("textarea");
         textArea.value = output;
