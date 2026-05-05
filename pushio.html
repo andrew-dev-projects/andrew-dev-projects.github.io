@@ -125,6 +125,24 @@
         </div>
     </div>
 
+    <div id="intro-video-screen" class="screen hidden" style="padding:0; background:#000;">
+        <video
+            id="intro-video"
+            playsinline
+            preload="auto"
+            style="width:100vw; height:100vh; object-fit:cover; background:#000;"
+        ></video>
+        <div style="position:absolute; top:16px; right:16px; display:flex; gap:10px; z-index:60;">
+            <button class="btn-outline" onclick="skipIntroVideo()">Skip [ENTER]</button>
+        </div>
+    </div>
+
+    <div id="intro-story-screen" class="screen hidden">
+        <h2 class="text-3xl text-blue-400 mb-4 font-bold uppercase">MISSION BRIEFING</h2>
+        <p id="intro-story-text" class="mb-8 text-blue-100 max-w-xl text-lg leading-relaxed whitespace-pre-line"></p>
+        <button class="btn-blue" onclick="beginMission()">BEGIN [ENTER]</button>
+    </div>
+
     <div id="story-screen" class="screen hidden">
         <h2 id="story-title" class="text-3xl text-blue-400 mb-4 font-bold uppercase">Sector Cleared</h2>
         <p id="story-text" class="mb-8 text-blue-100 max-w-xl text-lg leading-relaxed whitespace-pre-line"></p>
@@ -197,6 +215,7 @@
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const introVideoEl = document.getElementById('intro-video');
     
     let currentLevelIdx = 0;
     let timeLeft = 30;
@@ -215,6 +234,13 @@
     let audioCtx, musicGain, musicInterval;
     let isEditorMode = false;
     let currentBrush = '.';
+    let introHasPlayed = false;
+
+    // Set this to your actual file name if different.
+    // Relative to this HTML file (e.g. "videos/intro.mp4").
+    const INTRO_VIDEO_SRC = "videos/pushio_video.mp4";
+    const INTRO_STORY_TEXT =
+        "Signal acquired.\n\nYou are entering the Cobalt Crush sectors.\nPush the rocks. Seal the voids. Avoid the Sentinels.\n\nComplete all 20 sectors to extract the payload.";
 
     function generateComplexLevel(lvlNum) {
         const w = 11, h = 11;
@@ -482,12 +508,91 @@
 
     async function startGame() { 
         await initAudio();
-        document.getElementById('title-screen').classList.add('hidden'); 
-        loadLevel(0); 
-        if (!window.loopRunning) { window.loopRunning = true; gameLoop(); } 
+        document.getElementById('title-screen').classList.add('hidden');
+
+        // Run intro flow once per fresh launch from title.
+        if (!introHasPlayed) {
+            introHasPlayed = true;
+            await playIntroVideoThenStory();
+            return;
+        }
+
+        beginMission();
+    }
+
+    async function playIntroVideoThenStory() {
+        const videoScreen = document.getElementById('intro-video-screen');
+        const storyScreen = document.getElementById('intro-story-screen');
+        const storyText = document.getElementById('intro-story-text');
+
+        // Ensure other overlays are hidden.
+        storyScreen.classList.add('hidden');
+        document.getElementById('fail-screen').classList.add('hidden');
+        document.getElementById('story-screen').classList.add('hidden');
+
+        // Load and play.
+        introVideoEl.src = INTRO_VIDEO_SRC;
+        introVideoEl.currentTime = 0;
+        introVideoEl.controls = false;
+        introVideoEl.muted = false;
+
+        videoScreen.classList.remove('hidden');
+
+        // Some browsers need a second explicit gesture; clicking the video will attempt play again.
+        const ensurePlaying = async () => {
+            try { await introVideoEl.play(); } catch (_) {}
+        };
+        introVideoEl.onclick = ensurePlaying;
+
+        // Attempt play immediately (works after a user click on INITIALIZE).
+        await ensurePlaying();
+
+        const finish = async () => {
+            introVideoEl.pause();
+            introVideoEl.onclick = null;
+            videoScreen.classList.add('hidden');
+
+            storyText.innerText = INTRO_STORY_TEXT;
+            storyScreen.classList.remove('hidden');
+        };
+
+        introVideoEl.onended = finish;
+        introVideoEl.onerror = finish;
+    }
+
+    function skipIntroVideo() {
+        // Fast-forward to end; onended handler will advance.
+        try {
+            introVideoEl.currentTime = Math.max(0, introVideoEl.duration - 0.05);
+        } catch (_) {
+            // If duration isn't known yet, just trigger the same logic by pausing and calling onended.
+            if (typeof introVideoEl.onended === "function") introVideoEl.onended();
+        }
+    }
+
+    function beginMission() {
+        document.getElementById('intro-story-screen').classList.add('hidden');
+        document.getElementById('intro-video-screen').classList.add('hidden');
+        loadLevel(0);
+        if (!window.loopRunning) { window.loopRunning = true; gameLoop(); }
     }
     
-    function quitToMenu() { clearInterval(timerInterval); stopMusic(); document.getElementById('title-screen').classList.remove('hidden'); document.getElementById('story-screen').classList.add('hidden'); document.getElementById('fail-screen').classList.add('hidden'); }
+    function quitToMenu() {
+        clearInterval(timerInterval);
+        stopMusic();
+
+        // Reset intro flow so it plays again from the title screen.
+        introHasPlayed = false;
+
+        // Stop/hide intro UI if it was showing.
+        try { introVideoEl.pause(); } catch (_) {}
+        document.getElementById('intro-video-screen').classList.add('hidden');
+        document.getElementById('intro-story-screen').classList.add('hidden');
+
+        document.getElementById('title-screen').classList.remove('hidden');
+        document.getElementById('story-screen').classList.add('hidden');
+        document.getElementById('fail-screen').classList.add('hidden');
+    }
 
     function loadLevel(idx) {
         currentLevelIdx = idx;
@@ -528,7 +633,13 @@
 
     function movePlayer(dx, dy) {
         if (isEditorMode) return;
-        if (!document.getElementById('story-screen').classList.contains('hidden') || !document.getElementById('fail-screen').classList.contains('hidden') || !document.getElementById('title-screen').classList.contains('hidden')) return;
+        if (
+            !document.getElementById('story-screen').classList.contains('hidden') ||
+            !document.getElementById('fail-screen').classList.contains('hidden') ||
+            !document.getElementById('title-screen').classList.contains('hidden') ||
+            !document.getElementById('intro-video-screen').classList.contains('hidden') ||
+            !document.getElementById('intro-story-screen').classList.contains('hidden')
+        ) return;
         const nx = player.x + dx, ny = player.y + dy;
         const w = Math.round(canvas.width / tileSize), h = Math.round(canvas.height / tileSize);
         if (nx < 0 || nx >= w || ny < 0 || ny >= h || walls.some(wall => wall.x === nx && wall.y === ny)) return;
@@ -598,6 +709,8 @@
 
     function draw() {
         if (!document.getElementById('title-screen').classList.contains('hidden')) return;
+        if (!document.getElementById('intro-video-screen').classList.contains('hidden')) return;
+        if (!document.getElementById('intro-story-screen').classList.contains('hidden')) return;
         ctx.clearRect(0,0,canvas.width, canvas.height);
         for(let y=0; y<canvas.height/tileSize; y++){ for(let x=0; x<canvas.width/tileSize; x++){ ctx.strokeStyle = isEditorMode ? '#334155' : '#1e293b'; ctx.strokeRect(x*tileSize, y*tileSize, tileSize, tileSize); } }
         walls.forEach(w => { ctx.fillStyle = '#1e293b'; ctx.fillRect(w.x*tileSize, w.y*tileSize, tileSize, tileSize); ctx.strokeStyle = '#334155'; ctx.strokeRect(w.x*tileSize + 4, w.y*tileSize + 4, tileSize - 8, tileSize - 8); });
@@ -621,7 +734,14 @@
         const k = e.key.toLowerCase();
         if (k === 'e') { toggleEditor(); return; }
         if (isEditorMode) return;
-        if (k === 'enter' || e.code === 'Space') { if (!document.getElementById('title-screen').classList.contains('hidden')) startGame(); else if (!document.getElementById('story-screen').classList.contains('hidden')) handleStoryButton(); else if (!document.getElementById('fail-screen').classList.contains('hidden')) loadLevel(currentLevelIdx); return; }
+        if (k === 'enter' || e.code === 'Space') {
+            if (!document.getElementById('title-screen').classList.contains('hidden')) startGame();
+            else if (!document.getElementById('intro-video-screen').classList.contains('hidden')) skipIntroVideo();
+            else if (!document.getElementById('intro-story-screen').classList.contains('hidden')) beginMission();
+            else if (!document.getElementById('story-screen').classList.contains('hidden')) handleStoryButton();
+            else if (!document.getElementById('fail-screen').classList.contains('hidden')) loadLevel(currentLevelIdx);
+            return;
+        }
         if (k === 'arrowup' || k === 'w') movePlayer(0, -1); if (k === 'arrowdown' || k === 's') movePlayer(0, 1); if (k === 'arrowleft' || k === 'a') movePlayer(-1, 0); if (k === 'arrowright' || k === 'd') movePlayer(1, 0); if (k === 'r') loadLevel(currentLevelIdx);
     });
 </script>
